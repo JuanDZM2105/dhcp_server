@@ -40,18 +40,24 @@ simultáneamente.
 ### Compilar el servidor y cliente
 1. Clona este repositorio:
    git clone <url del repositorio>
+   
 2.Compila el servidor DHCP:
    gcc server.c -o server -lpthread
+   
 3.Compila el cliente DHCP:
    gcc client.c -o client -lpthread
+   
 4.Ejecutar el Servidor
    ./dhcp_server
+   
 5. Ejecutar cliente
    ./dhcp.client
 
 ## Estructura del proyecto
 ├── client.c         # Código fuente del cliente DHCP
+
 ├── server.c         # Código fuente del servidor DHCP
+
 ├── README.md        # Este archivo
 
 
