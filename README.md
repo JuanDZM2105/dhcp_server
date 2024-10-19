@@ -13,14 +13,14 @@
 ---
 
 ## Integrantes del grupo
-- **Nombre 1**  
-- **Nombre 2**  
-- **Nombre 3**
+- **Anderson Sebastian Jimenez Mercado**  
+- **Felipe Martinez Cortez**  
+- **Juan David Zapata**
 
 ---
 
 ## Link del video
-[Enlace al video de la sustentación](https://link-al-video.com)
+[Enlace al video de la sustentación](https://eafit-my.sharepoint.com/:f:/g/personal/asjimenezm_eafit_edu_co/EoWAX6YuPzVPnXisgqTfZV8BOTqloysMw_v3YDyLJOkxNw?e=JlFJtJ)
 
 ---
 
