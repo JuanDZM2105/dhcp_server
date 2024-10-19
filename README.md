@@ -88,7 +88,7 @@ La implementación del servidor y cliente DHCP permite asignar y gestionar direc
    sudo ./dhcp_server
     ```
 
-    Ejecución: Una vez compilado, ejecuta el servidor con permisos de root debido a que usa el puerto 67:
+    Ejecución: Una vez compilado, ejecuta el cliente con permisos de root debido a que usa el puerto 68:
     ```bash
    sudo ./dhcp_client
 
