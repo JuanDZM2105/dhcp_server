@@ -9,7 +9,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#define LEASE_DURATION 180  // Lease time in seconds (3 minutes)
+#define LEASE_DURATION 60  // Lease time in seconds (2 minutes)
 #define SERVER_PORT 67
 #define MAX_MESSAGE_SIZE 2048
 #define AVAILABLE_IPS 10
@@ -66,8 +66,9 @@ void create_ip_range(char *ip_pool[], const char *start_ip, const char *end_ip) 
 
 void process_ip_release(int client_socket, struct sockaddr_in *client_address, socklen_t address_length, const char *ip_to_release) {
     for (int i = 0; i < AVAILABLE_IPS; i++) {
-        if (strcmp(ip_pool[i], ip_to_release) == 0) {
+        if (strcmp(ip_pool[i], ip_to_release) == 0 && ip_status[i] == 1) {
             ip_status[i] = 0;
+            lease_expiration[i] = 0; // Resetear el tiempo de arrendamiento
             printf("Released IP: %s\n", ip_pool[i]);
 
             char message[256];
@@ -85,7 +86,7 @@ void process_ip_release(int client_socket, struct sockaddr_in *client_address, s
 void process_ip_renewal(int client_socket, struct sockaddr_in *client_address, socklen_t address_length, const char *ip_to_renew) {
     for (int i = 0; i < AVAILABLE_IPS; i++) {
         if (strcmp(ip_pool[i], ip_to_renew) == 0 && ip_status[i] == 1) {
-            lease_expiration[i] = time(NULL);
+            lease_expiration[i] = time(NULL) + LEASE_DURATION; // Renovar el tiempo de arrendamiento
             printf("IP %s renewed.\n", ip_to_renew);
 
             char message[256];
@@ -121,6 +122,7 @@ void process_ip_request(int client_socket, struct sockaddr_in *client_address, s
 void process_ip_discovery(int client_socket, struct sockaddr_in *client_address, socklen_t address_length) {
     char *available_ip = NULL;
     time_t current_time = time(NULL);
+    char message[2048];  // Aumentamos el tamaño del buffer a 2048
 
     for (int i = 0; i < AVAILABLE_IPS; i++) {
         if (ip_status[i] == 0) {
@@ -131,9 +133,18 @@ void process_ip_discovery(int client_socket, struct sockaddr_in *client_address,
     }
 
     if (available_ip != NULL) {
-        char message[256];
-        snprintf(message, sizeof(message), "Offered IP: %s\nNetmask: %s\nDNS: %s\nGateway: %s\nLease duration: %d seconds",
-                 available_ip, SUBNET_MASK, DNS, SERVER_GATEWAY, LEASE_DURATION);
+        snprintf(message, sizeof(message),
+                 "Offered IP: %s\n"
+                 "Mask: %s\n"
+                 "DNS: %s\n"
+                 "Gateway: %s\n"
+                 "Lease time: %d seconds",
+                 available_ip,
+                 SUBNET_MASK, 
+                 DNS, 
+                 SERVER_GATEWAY, 
+                 LEASE_DURATION);
+
         sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)client_address, address_length);
         printf("Offered IP: %s\n", available_ip);
     } else {
