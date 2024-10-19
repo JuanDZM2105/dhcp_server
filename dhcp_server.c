@@ -9,7 +9,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#define LEASE_DURATION 60  // Lease time in seconds (2 minutes)
+#define LEASE_DURATION 60  // Lease time in seconds
 #define SERVER_PORT 67
 #define MAX_MESSAGE_SIZE 2048
 #define AVAILABLE_IPS 10
@@ -101,15 +101,21 @@ void process_ip_renewal(int client_socket, struct sockaddr_in *client_address, s
     sendto(client_socket, error_message, strlen(error_message), 0, (struct sockaddr *)client_address, address_length);
 }
 
-void process_ip_request(int client_socket, struct sockaddr_in *client_address, socklen_t address_length, const char *requested_ip) {
+void process_ip_request(int client_socket, struct sockaddr_in *client_address, socklen_t address_length, const char *requested_ip, struct sockaddr_in *relay_address) {
     for (int i = 0; i < AVAILABLE_IPS; i++) {
         if (strcmp(ip_pool[i], requested_ip) == 0 && ip_status[i] == 0) {
             ip_status[i] = 1;
             lease_expiration[i] = time(NULL);
             char message[256];
             snprintf(message, sizeof(message), "Acknowledged: IP %s assigned", requested_ip);
-            sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)client_address, address_length);
-            printf("Assigned IP: %s\n", requested_ip);
+
+            if (relay_address != NULL) {
+                sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)relay_address, address_length);
+                printf("Assigned IP: %s (via relay)\n", requested_ip);
+            } else {
+                sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)client_address, address_length);
+                printf("Assigned IP: %s\n", requested_ip);
+            }
             return;
         }
     }
@@ -119,10 +125,30 @@ void process_ip_request(int client_socket, struct sockaddr_in *client_address, s
     printf("Invalid IP request. Retry initiated.\n");
 }
 
-void process_ip_discovery(int client_socket, struct sockaddr_in *client_address, socklen_t address_length) {
+
+void process_ip_discovery(int client_socket, struct sockaddr_in *client_address, socklen_t address_length, struct sockaddr_in *relay_address) {
     char *available_ip = NULL;
     time_t current_time = time(NULL);
-    char message[2048];  // Aumentamos el tamaño del buffer a 2048
+    char message[2048];
+
+
+        // Dependiendo de la subred del relay, asigna un rango de IPs
+    if (relay_address != NULL) {
+        char *relay_subnet = inet_ntoa(relay_address->sin_addr);
+        if (strncmp(relay_subnet, "192.168.1", 9) == 0) {
+            // Asignar IPs del rango 192.168.1.x
+        } else if (strncmp(relay_subnet, "10.0.0", 7) == 0) {
+            // Asignar IPs del rango 10.0.0.x
+        }
+    }
+
+    for (int i = 0; i < AVAILABLE_IPS; i++) {
+        if (ip_status[i] == 0) {
+            available_ip = ip_pool[i];
+            lease_expiration[i] = current_time;
+            break;
+        }
+    }
 
     for (int i = 0; i < AVAILABLE_IPS; i++) {
         if (ip_status[i] == 0) {
@@ -145,26 +171,39 @@ void process_ip_discovery(int client_socket, struct sockaddr_in *client_address,
                  SERVER_GATEWAY, 
                  LEASE_DURATION);
 
-        sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)client_address, address_length);
-        printf("Offered IP: %s\n", available_ip);
+        if (relay_address != NULL) {
+            // Si viene de un relay, enviamos al relay
+            sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)relay_address, address_length);
+            printf("Offered IP: %s (via relay)\n", available_ip);
+        } else {
+            // Si no, enviamos directamente al cliente
+            sendto(client_socket, message, strlen(message), 0, (struct sockaddr *)client_address, address_length);
+            printf("Offered IP: %s\n", available_ip);
+        }
     } else {
         char *no_ip_message = "No available IPs.";
-        sendto(client_socket, no_ip_message, strlen(no_ip_message), 0, (struct sockaddr *)client_address, address_length);
+        if (relay_address != NULL) {
+            sendto(client_socket, no_ip_message, strlen(no_ip_message), 0, (struct sockaddr *)relay_address, address_length);
+        } else {
+            sendto(client_socket, no_ip_message, strlen(no_ip_message), 0, (struct sockaddr *)client_address, address_length);
+        }
         printf("No available IPs to offer.\n");
     }
 }
+
 
 void *client_handler(void *arg) {
     int client_socket = *(int *)arg;
     free(arg);
 
     char buffer[MAX_MESSAGE_SIZE];
-    struct sockaddr_in client_address;
+    struct sockaddr_in client_address, relay_address;
     socklen_t address_length = sizeof(client_address);
     int message_size;
 
     while (1) {
         memset(buffer, 0, sizeof(buffer));
+        memset(&relay_address, 0, sizeof(relay_address));
         message_size = recvfrom(client_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_address, &address_length);
 
         if (message_size < 0) {
@@ -174,12 +213,22 @@ void *client_handler(void *arg) {
 
         printf("Received: %s\n", buffer);
 
+        // Verificar si el mensaje viene de un relay (giaddr diferente de 0)
+        if (client_address.sin_addr.s_addr != INADDR_ANY) {  
+            // El mensaje viene de un relay, manejar giaddr
+            memcpy(&relay_address, &client_address, sizeof(struct sockaddr_in));
+        } else {
+            // No viene de un relay
+            relay_address.sin_addr.s_addr = 0;
+        }
+
+        // Procesar según el tipo de mensaje
         if (strcmp(buffer, "DHCPDISCOVER") == 0) {
-            process_ip_discovery(client_socket, &client_address, address_length);
+            process_ip_discovery(client_socket, &client_address, address_length, (relay_address.sin_addr.s_addr != 0) ? &relay_address : NULL);
         } else if (strstr(buffer, "DHCPREQUEST") != NULL) {
             char *ip_request = strtok(buffer + strlen("DHCPREQUEST: "), " ");
             if (ip_request != NULL) {
-                process_ip_request(client_socket, &client_address, address_length, ip_request);
+                process_ip_request(client_socket, &client_address, address_length, ip_request, (relay_address.sin_addr.s_addr != 0) ? &relay_address : NULL);
             }
         } else if (strstr(buffer, "DHCPRELEASE") != NULL) {
             char *ip_release = strtok(buffer + strlen("DHCPRELEASE: "), " ");
@@ -201,6 +250,7 @@ void *client_handler(void *arg) {
 
     return NULL;
 }
+
 
 int main() {
     obtain_gateway_ip();
