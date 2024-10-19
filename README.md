@@ -76,3 +76,22 @@ La implementación del servidor y cliente DHCP permite asignar y gestionar direc
    Para compilar el servidor DHCP, abre una terminal y ejecuta el siguiente comando:
    ```bash
    gcc -o dhcp_server dhcp_server.c -lpthread
+    ```
+
+   Para compilar el cliente DHCP, abre una terminal y ejecuta el siguiente comando:
+   ```bash
+   gcc -o dhcp_server dhcp_client.c -lpthread
+
+2. **Ejecucion**
+   Ejecución: Una vez compilado, ejecuta el servidor con permisos de root debido a que usa el puerto 67:
+    ```bash
+   sudo ./dhcp_server
+    ```
+
+    Ejecución: Una vez compilado, ejecuta el servidor con permisos de root debido a que usa el puerto 67:
+    ```bash
+   sudo ./dhcp_client
+
+### Notas adicionales
+- El servidor y el cliente deben estar en la misma red o subred para que la comunicación sea efectiva (a menos que se use un relay).
+- En caso de necesitar simular subredes diferentes, configura un DHCP relay entre las subredes y el servidor DHCP.
